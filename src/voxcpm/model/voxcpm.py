@@ -108,6 +108,7 @@ class VoxCPMModel(nn.Module):
         tokenizer: LlamaTokenizerFast,
         audio_vae: AudioVAE,
         lora_config: LoRAConfig = None,
+        dtype: str = None,
     ):
         super().__init__()
         self.config = config
@@ -120,6 +121,10 @@ class VoxCPMModel(nn.Module):
                 self.device = "mps"
             else:
                 self.device = "cpu"
+        if dtype is not None:
+            self.config.dtype = dtype
+        elif self.device == "cpu" and self.config.dtype == "bfloat16":
+            self.config.dtype = "float32"
         print(f"Running on device: {self.device}, dtype: {self.config.dtype}")
 
         # Text-Semantic LM
@@ -839,7 +844,7 @@ class VoxCPMModel(nn.Module):
             
 
     @classmethod
-    def from_local(cls, path: str, optimize: bool = True, training: bool = False, lora_config: LoRAConfig = None):
+    def from_local(cls, path: str, optimize: bool = True, training: bool = False, lora_config: LoRAConfig = None, dtype: str = None):
         config = VoxCPMConfig.model_validate_json(open(os.path.join(path, "config.json")).read())
         tokenizer = LlamaTokenizerFast.from_pretrained(path)
         audio_vae_config = getattr(config, 'audio_vae_config', None)
@@ -849,7 +854,7 @@ class VoxCPMModel(nn.Module):
             map_location="cpu",
             weights_only=True,
         )["state_dict"]
-        model = cls(config, tokenizer, audio_vae, lora_config)
+        model = cls(config, tokenizer, audio_vae, lora_config, dtype=dtype)
         if not training:
             lm_dtype = get_dtype(model.config.dtype)
             model = model.to(lm_dtype)
